@@ -1,0 +1,300 @@
+#Script 1
+#!/bin/bash
+
+for file in ~/filesToSort/ff_*;
+ do
+   # Get the first line of each file and split up the date into variables
+   year=$(head -1 $file | cut -d"-" -f1)
+   month=$(head -1 $file | cut -d"-" -f2)
+   day=$(head -1 $file | cut -d"-" -f3)
+
+    # find any directories already made if there is an error discard it
+    foundYear=$(find ~/filesToSort/$year -maxdepth 0 -type d 2> /dev/null)
+    foundMonth=$(find ~/filesToSort/$year/$month -maxdepth 0 -type d 2> /dev/null)
+    foundDay=$(find ~/filesToSort/$year/$month/$day -maxdepth 0 -type d 2> /dev/null)
+    
+    # if the directory doesn't exist make it
+    if [ -z $foundYear ] ; then
+     mkdir ~/filesToSort/$year
+    fi
+    
+    if [ -z $foundMonth ] ; then
+     mkdir ~/filesToSort/$year/$month
+    fi
+    
+    if [ -z $foundDay ] ; then
+     mkdir ~/filesToSort/$year/$month/$day
+    fi
+     
+     # finally move the file into the correct directory
+     mv $file ~/filesToSort/$year/$month/$day
+   done
+
+#script 2a
+
+ #!/bin/bash
+ 
+for file in $(find ~/filesToSort -type f -name ff_*)
+ do
+  # For each file get the date from its location in folders
+  dateFromLocation=$(echo $file | cut -d "/" -f7-9)
+  # For each file get the date from inside the file
+  dateFromFile=$(head -1 $file)
+  # For each date taken from the location replace the / with -
+  formatDate=$(echo $dateFromLocation | tr "/" "-")   
+  
+  # Compare the formatDate with the date from the file, if they do not match the file is corrupted 
+  if [ $formatDate != $dateFromFile ] ; then
+   echo "$file has a broken date, $dateFromFile"
+  fi 
+ done
+
+#script 2b
+
+#!/bin/bash
+
+for file in $(find ~/filesToSort -type f -name ff_*)
+ do
+  # For each file get the date from its location in folders
+  dateFromLocation=$(echo $file | cut -d "/" -f7-9)
+  # For each file get the date from inside the file
+  dateFromFile=$(head -1 $file)
+  # For each date taken from the location replace the / with -
+  formatDate=$(echo $dateFromLocation | tr "/" "-")    
+
+  # Compare the formatDate with the date from the file, if they do not match place the correct data in a tempFile and replace the original file with the temp file.
+  if [ $formatDate != $dateFromFile ] ; then
+   echo $formatDate > tempFile
+   tail -3 $file >> tempFile
+   mv tempFile $file
+  fi
+ done
+
+ #script 3
+
+#!/bin/bash
+
+# Display error
+function throwError() {
+ echo $1 
+ exit 1
+}
+
+# Find the date directory
+foundDate=$(find ~/filesToSort -maxdepth 1 -type d -name $1 2> /dev/null)
+
+# Check there is a date directory
+if [ -z $foundDate ] ; then
+ throwError "No data for this date"
+fi
+
+# Check if the are enough arguments
+if [ $# -ne 2 ] ; then
+ throwError "Use only two arguements please"
+fi
+
+# Find the average population for the year
+function findAverage() {
+ local totalPop=0
+ local numOfValues=0
+ for file in $(find ~/filesToSort/$1 -type f -name ff_*)
+  do
+   local currentPop=$(tail -1 $file)
+   numOfValues=$((numOfValues + 1))
+   # Add the currentPop to the totalPop
+   totalPop=$(($currentPop + $totalPop))
+  done
+  # Divide the the totalPop by the numOfValues to get the average
+  local average=$(echo "scale=0; $totalPop/$numOfValues" | bc)
+  echo "The average population for $1 was $average"
+}
+
+# Find the maximum population for the year
+function findMax() {
+ local maxPop=0
+ for file in $(find ~/filesToSort/$1 -type f -name ff_*)
+  do
+   local currentPop=$(tail -1 $file)
+   # If the currentPop is greater than the maxPop if it is replace the max    Pop with the currentPop
+   if [ $currentPop -gt $maxPop ] ; then
+    maxPop=$(echo $currentPop)
+   fi
+  done
+ echo "The Maximum population for $1 was $maxPop"
+}
+
+# Find the minimum population for the year
+function findMin() {
+ local minPop=0
+ local count=0
+ for file in $(find ~/filesToSort/$1 -type f -name ff_*)
+   do
+    local currentPop=$(tail -1 $file)
+    # If its the first loop assign the minPop to the currentPop
+    if [ $count -eq 0 ] ; then
+     minPop=$(echo $currentPop)
+    # Otherwise check if the currentPop is smaller than the minPop. If it is set the minPop to the currentPop
+    elif [ $currentPop -lt $minPop ] ; then
+     minPop=$(echo $currentPop)
+    fi
+    count=$((count + 1))
+  done
+ echo "The Minimun population for $1 was $minPop"
+}
+
+# Display all the options
+function displayAll() {
+ echo $(findAverage $1 $2)
+ echo $(findMax $1 $2)
+ echo $(findMin $1 $2)
+}
+
+# Run function according to second argument
+case $2 in
+average) findAverage $1 $2;;
+maximum) findMax $1 $2;;
+minimum) findMin $1 $2;;
+all) displayAll $1 $2;;
+*) throwError "Please use average, maximum, minimum or all";;
+
+
+#script 4a
+#!/bin/bash
+
+for file in $(find ~/filesToSort -type f -name ff_*)
+ do
+  # For each file get the date from its location in fold    ers
+  path=$(echo $file)
+  # For each file get the date from inside the file
+  townName=$(tail -2 $file | head -1)
+  echo $townName:$path >> tempFile
+ done
+
+sort tempFile > temp2
+mv temp2 townFileIndex
+rm tempFile
+
+#script 4b
+
+#!/bin/bash
+
+# Display error
+function throwError() {
+ echo $1 
+ exit 1
+}
+
+# Check if the are enough arguments
+if [ $# -eq 0 ] ; then
+ throwError "Need at least one argument"
+fi
+
+# Loop through each arguement
+for town in $*
+ do
+  echo $town:
+  # Find the line that contains the town, then split the line to get only the town name
+  listOfTowns=$(grep -w $town ~/filesToSort/townFileIndex | cut -d ":" -f1)
+  # If there is more than one version of the town remove it.
+  found=$(echo $listOfTowns | cut -d " " -f1)
+  # If the town is found and exactly the same as the on found (Hull is will not work for Kingston-upon-Hull) then display the info.
+  if [[ -n $found && $town = $found ]] ; then
+   for foundTown in $(grep $town ~/filesToSort/townFileIndex)
+    do 
+     file=$(echo $foundTown | cut -d":" -f2)
+     date=$(head -1 $file)
+     pop=$(tail -1 $file)
+     echo $date:$pop
+    done
+  # If not then display this message
+  else
+   echo "Cannot find this town in the current records"
+  fi
+ done
+
+ #script 4c
+
+#!/bin/bash
+
+# Display error
+function throwError() {
+ echo $1 
+ exit 1
+}
+
+# Check if the are enough arguments
+if [ $# -eq 0 ] ; then
+ throwError "Need at least one argument"
+fi
+
+# If there is not townFileIndex create it by running the script
+if [ ! -f ~/filesToSort/townFileIndex ] ; then
+ /bin/bash ~/filesToSort/createTownIndex.bash
+fi
+
+# Find the maximum population overall
+function findMax() {
+ local maxPop=0
+ for pop in $*
+  do
+   local currentPop=$(echo $pop)
+   # If the currentPop is greater than the maxPop if it is replace the maxPop with the currentPop
+   if [ $currentPop -gt $maxPop ] ; then
+    local maxPop=$(echo $currentPop)
+   fi
+  done
+echo The maximum population is $maxPop
+}
+
+# Find the minimum population overall
+function findMin() {
+ local minPop=0
+ local count=0
+ for minPop in $*
+   do
+    local currentPop=$(echo $minPop)
+    # If its the first loop assign the minPop to the currentPop
+    if [ $count -eq 0 ] ; then
+     minPop=$(echo $currentPop)
+    # Otherwise check if the currentPop is smaller than the minPop. If it is set the minPop to the currentPop
+    elif [ $currentPop -lt $minPop ] ; then
+     minPop=$(echo $currentPop)
+    fi
+    count=$((count + 1))
+  done
+ echo The Minimun population is $minPop
+}
+
+# Find the average overall
+function findAverage() {
+ local totalPop=0
+ local numOfValues=0
+ for averPop in $*
+  do
+   local currentPop=$(echo $averPop)
+   numOfValues=$((numOfValues + 1))
+   # Add the currentPop to the totalPop
+   totalPop=$(($currentPop + $totalPop))
+  done
+  # Divide the the totalPop by the numOfValues to get the average
+  local average=$(echo "scale=0; $totalPop/$numOfValues" | bc)
+  echo "The average population is $average"
+}
+
+# Loop through each arguement
+for town in $*
+ do
+  # Use getPopTown script to find the population of the town
+  pop=$(/bin/bash ~/filesToSort/getPopTown.bash $town | cut -d ":" -f2)
+  echo $town:
+  # Get the first character of the population
+  check=$(echo $pop | cut -c1-1)
+  # the first character of the population is a letter it has no records of the town, otherwise run the functions.
+  case $check in
+   [[alpha:]]) echo $pop ;;
+   [[digit:]]) findAverage $pop
+   findMin $pop
+   findMax $pop ;;
+   *) echo 'Unknown error' ;;
+  esac  
+do
